@@ -54,13 +54,25 @@ class dsp {};
 // Interface
 //**************************************************************
 
-mydsp _instance;
 
-// Enough space for the input and output buffers, plus the arrays of pointers to them
-unsigned char _iobuffers[
-      (FAUST_INPUTS + FAUST_OUTPUTS) * sizeof(FAUSTFLOAT*)
-    + (FAUST_INPUTS + FAUST_OUTPUTS) * SAMPLE_COUNT * sizeof(FAUSTFLOAT)
-];
+// We'll put the following union at memory 0, so that the JSON description will end
+// up there where the js module expects it. The section(".rodata") is a hack to make
+// sure that this memory gets placed before all other global data -- wasm-ld
+// puts .rodata before everything else.
+union JsonAndDsp {
+    char _json_data[4 * 4096];
+    struct {
+        mydsp _dsp_instance;
+        // Enough space for the input and output buffers, plus the arrays of
+        // pointers to them
+        unsigned char _iobuffers[
+              (FAUST_INPUTS + FAUST_OUTPUTS) * sizeof(FAUSTFLOAT*)
+            + (FAUST_INPUTS + FAUST_OUTPUTS) * SAMPLE_COUNT * sizeof(FAUSTFLOAT)
+        ];
+    };
+};
+JsonAndDsp __attribute__((section(".rodata"))) _instance;
+
 
 extern "C" {
 
@@ -71,40 +83,37 @@ void __cxa_pure_virtual(void) {
 }
 
 // This is for zeroing out the stack during wasm-ctor-eval.
-extern unsigned char __global_base;
+extern unsigned char __data_end;
+extern unsigned char __heap_base;
 
 void WASM_EXPORT(_init_json_ui)() {
     JSONUI jui{};
-    _instance.buildUserInterface(&jui);
-    _instance.metadata(&jui);
+    _instance._dsp_instance.buildUserInterface(&jui);
+    _instance._dsp_instance.metadata(&jui);
 
-    // Allocate a preliminary buffer on the stack to write the JSON to. npf_snprintf needs a non-volatile buffer,
-    // and in order to later write to address 0 we'll need that to be volatile. It's okay to use a lot of memory here
-    // because we only call this during compile time (i.e. during wasm-ctor-eval) and then we strip this function out.
-    constexpr size_t BUF_SIZE = 4 * 4096;
-    char _buf[BUF_SIZE];
-    jui.JSON(_buf, FAUST_CLASS_NAME, FAUST_FILE_NAME, FAUST_INPUTS, FAUST_OUTPUTS, _iobuffers);
-
-    // Write _buf to address 0. This will be in the unused portion of the stack so it won't overwrite anything important
-    volatile unsigned char* _zero = 0;
-    size_t i = 0;
-    for (; i < BUF_SIZE; ++i) {
-        _zero[i] = _buf[i];
-    }
+    jui.JSON(
+        _instance._json_data,
+        FAUST_CLASS_NAME,
+        FAUST_FILE_NAME,
+        FAUST_INPUTS,
+        FAUST_OUTPUTS,
+        /* dspSize */ (uintptr_t)_instance._iobuffers - (uintptr_t)&_instance._dsp_instance
+    );
 
     // Zero out the rest of the stack. Again, this function is getting called by wasm-ctor-eval, and we do this
     // so that the dirty stack contents don't get saved into the resulting binary.
-    for (; _zero + i < &__global_base; ++i) {
-        _zero[i] = 0;
+    volatile unsigned char* _start = (volatile unsigned char*)&__data_end;
+    for (size_t i = 0; _start + i < &__heap_base; ++i) {
+        _start[i] = 0;
     }
 }
 
 void WASM_EXPORT(init)(void*, int sample_rate) {
-    _instance.init(sample_rate);
+    _instance._dsp_instance.init(sample_rate);
 }
 
 void WASM_EXPORT(compute)(void*, int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs) {
-    _instance.compute(count, inputs, outputs);
+    _instance._dsp_instance.compute(count, inputs, outputs);
 }
 
 }

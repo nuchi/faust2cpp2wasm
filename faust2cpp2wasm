@@ -77,7 +77,7 @@ faust -lang cpp -a wasm_arch.cpp -uim "$INFILE" -cn "$CLASSNAME" | \
     -o "$tmpfile" \
     -O2 -fno-exceptions \
     -mexec-model=reactor -fno-math-errno -ffast-math \
-    -Wl,--stack-first
+    -Wl,--global-base=0
 
 if ! wasm-ctor-eval "$tmpfile" --ctors _initialize,_init_json_ui -o "$tmpfile" \
       | grep -e 'success on _init_json_ui' > /dev/null; then

@@ -166,14 +166,14 @@ public:
         declare(nullptr, key, val);
     }
 
-    void JSON(char* dest, const char* name, const char* filename, int inputs, int outputs, unsigned char* offset) {
+    void JSON(char* dest, const char* name, const char* filename, int inputs, int outputs, int dspSize) {
         stringstream JSON{dest};
         JSON << "{";
         JSON << "\"name\":\"" << name << "\",";
         JSON << "\"filename\":\"" << filename << "\",";
         JSON << "\"inputs\":" << inputs << ",";
         JSON << "\"outputs\":" << outputs << ",";
-        JSON << "\"size\":" << reinterpret_cast<int>(offset) << ",";
+        JSON << "\"size\":" << dspSize << ",";
         JSON << "\"ui\":[" << _ui_stream << remove_comma << "],";
         addMeta(JSON);
         JSON << remove_comma << "}";
