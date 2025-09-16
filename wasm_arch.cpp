@@ -70,6 +70,7 @@ union JsonAndDsp {
             + (FAUST_INPUTS + FAUST_OUTPUTS) * SAMPLE_COUNT * sizeof(FAUSTFLOAT)
         ];
     };
+    JsonAndDsp(){}
 };
 JsonAndDsp __attribute__((section(".rodata"))) _instance;
 
